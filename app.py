@@ -542,6 +542,26 @@ if page == "🏠  Dashboard Global":
             stat = "⚠️ En retard" if r['mps_retard'] else "🟡 Proche" if r['jours_depuis_mps']>r['intervalle_mps_ref']*0.8 else "✅ À jour"
             rows.append({'Famille':f[:20],'Dernière MPS':f"{r['jours_depuis_mps']}j",'Statut':stat})
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+    st.markdown('<div class="section-title">Synthèse du projet</div>', unsafe_allow_html=True)
+    s1,s2,s3,s4,s5 = st.columns(5)
+    s1.metric("Pannes analysées", "2 943", help="Historique GMAO 2020-2025")
+    s2.metric("MPS exploitées", "2 825")
+    s3.metric("Features modèle", "15")
+    s4.metric("Recall / AUC", f"{st.session_state.recall_actuel:.3f} / {st.session_state.auc_actuel:.3f}")
+    s5.metric("Familles suivies", "10")
+    st.markdown("""
+    <div style="background:#0D1526;border:1px solid #22314D;border-radius:12px;padding:16px 20px;margin:12px 24px 0">
+      <div style="color:#5EA1F0;font-weight:700;font-size:12.5px;margin-bottom:6px">🎯 En résumé</div>
+      <div style="color:#9BAAC7;font-size:12px;line-height:1.6">
+        Ce système transforme l'historique GMAO de la cellule DENGENSHA (9 651 interventions brutes, 2020–2025) en un outil
+        d'aide à la décision : diagnostic de fiabilité (Pareto, AMDEC, Weibull, MTBF/MTTR), modèle Random Forest
+        (Recall {:.3f}, AUC {:.3f}) et tableau de bord opérationnel — dans le but de réduire les arrêts non planifiés
+        et de soutenir la cadence de production destinée à Renault et Stellantis.
+      </div>
+    </div>
+    """.format(st.session_state.recall_actuel, st.session_state.auc_actuel), unsafe_allow_html=True)
+
     footer()
 
 # ═══════════════════════════════════════════════════════
