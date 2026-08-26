@@ -244,6 +244,24 @@ ACTIONS = {
 }
 
 CSV_PANNES = "pannes_saisies.csv"; CSV_MPS = "mps_saisies.csv"; CSV_RETOUR = "retours_intervention.csv"
+CSV_PANNES_ML = "pannes_saisies_ml.csv"; CSV_MPS_ML = "mps_saisies_ml.csv"
+
+# ═══════════════════════════════════════════
+# LISTES SYMPTÔMES — pour menus déroulants stricts (page Saisie Panne ML)
+# ═══════════════════════════════════════════
+SYMPTOMES = {
+ 'Lanceur / Bol Vibrant': ["Écrou non éjecté / manque au poste","Bol vibrant bloqué / vibration anormale","Écrou mal orienté à la sortie","Bruit anormal sur le lanceur","Aimant ne charge pas la lance","Autre"],
+ 'Panne Machine Générale': ["Arrêt cycle sans message clair","IHM PROFACE figée","Cycle ne redémarre pas après acquittement","Alarme API répétitive","Autre"],
+ 'Capteurs / Cellules': ["Détection écrou absente ou erratique","Barrière immatérielle déclenche sans passage","Cycle bloqué en attente signal capteur","Câble visiblement endommagé","Autre"],
+ 'Blocage Écrou': ["Écrou coincé dans la goulotte","Accumulation d'écrous en amont","Écrou de travers visible","Shut ne libère pas l'écrou","Autre"],
+ 'Volet / Trappe': ["Volet ne se ferme pas complètement","Trappe bloquée en position ouverte","Bruit de choc au mouvement du volet","Capteur position volet en défaut","Autre"],
+ 'Circuit Refroidissement': ["Fuite d'eau visible","Alarme débit d'eau insuffisant","Surchauffe détectée sur électrodes","Flaque / trace d'humidité au sol","Autre"],
+ 'Circuit Pneumatique': ["Fuite d'air audible (sifflement)","Pression FRL hors plage","Vérin ne termine pas sa course","Mouvement pneumatique incomplet","Autre"],
+ 'Plateau Indexage': ["Plateau mal positionné sur un poste","Bruit anormal à la rotation","Jeu mécanique perceptible","Capteur fin de course en défaut","Autre"],
+ 'Défaut Soudure / Électrodes': ["Point de soudure non conforme visuellement","Électrode visiblement usée","Alarme fin de vie électrode","Intensité de soudage anormale","Autre"],
+ 'Problème Électrique': ["Coupure alimentation cellule","Disjoncteur déclenché","Fusible grillé constaté","Voyant tension absent","Autre"],
+}
+NIVEAUX_GRAVITE = ["1 — Anomalie mineure, aucun arrêt", "2 — Ralentissement léger", "3 — Arrêt court (< 15 min)", "4 — Arrêt significatif (15-60 min)", "5 — Arrêt majeur (> 1h) ou risque sécurité"]
 
 def sauver_csv(path, row):
     existe = os.path.exists(path)
@@ -369,6 +387,7 @@ def get_analyse_complete():
 # SESSION STATE
 # ═══════════════════════════════════════════
 for k, v in [('saisies_pannes',[]), ('saisies_mps',[]), ('retours_intervention',[]),
+             ('saisies_pannes_ml',[]), ('saisies_mps_ml',[]),
              ('etat_actuel_machine',{}), ('recall_actuel',0.771), ('auc_actuel',0.772),
              ('nb_saisies',0), ('historique_perf',[{'label':'V2 initial','recall':0.771,'auc':0.772}]),
              ('dernier_entrainement', NOW - timedelta(days=12))]:
@@ -398,7 +417,9 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
 
     page = st.radio("", [
+        "🎓  Synthèse du Projet",
         "🏠  Dashboard Global","🤖  Analyse Prédictive","🔧  État Actuel Machine",
+        "📝  Saisie Panne (ML)",
         "🚨  Fiches Intervention","📉  Fiabilité Weibull","📊  Historique & Pareto",
         "⚙️  Administration","📖  Guide & Glossaire",
     ], label_visibility="collapsed")
@@ -436,9 +457,100 @@ def footer():
     </div>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════
+# PAGE 0 — SYNTHÈSE DU PROJET (soutenance)
+# ═══════════════════════════════════════════
+if page == "🎓  Synthèse du Projet":
+    header("🎓 Synthèse du Projet de Fin d'Années",
+           "Système de Maintenance Prédictive par Machine Learning — Cellule DENGENSHA",
+           "PFA","2025-2026")
+
+    st.markdown("""
+    <div class="pred-banner">
+      <div class="pred-banner-text">
+        <h3>📌 GMD Métal Tanger — ZAP PLT — UAP Assemblage</h3>
+        <p>De l'historique GMAO à un outil d'aide à la décision opérationnel, en 4 étapes : diagnostic de fiabilité, modélisation ML, tableau de bord, boucle d'amélioration continue.</p>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # KPIs de synthèse
+    st.markdown('<div class="kpi-grid">', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">📂 Historique traité</div></div>
+      <div class="kpi-value">9 651</div><div class="kpi-sub">Interventions GMAO 2020–2025</div></div>
+    <div class="kpi-card ok"><div class="kpi-top"><div class="kpi-label">✅ Pannes exploitables</div></div>
+      <div class="kpi-value">2 943</div><div class="kpi-sub">99,8% de taux de classification</div></div>
+    <div class="kpi-card"><div class="kpi-top"><div class="kpi-label">🧠 Recall du modèle</div></div>
+      <div class="kpi-value">0.771</div><div class="kpi-sub">Random Forest V2 · 15 features</div></div>
+    <div class="kpi-card ok"><div class="kpi-top"><div class="kpi-label">📈 AUC</div></div>
+      <div class="kpi-value">0.772</div><div class="kpi-sub">Capacité discriminante du modèle</div></div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([3,2])
+
+    with col1:
+        st.markdown('<div class="section-title">Démarche complète du projet</div>', unsafe_allow_html=True)
+        etapes_projet = [
+            ("1","Diagnostic de fiabilité","Traitement de 9 651 interventions GMAO → 2 943 pannes exploitables classifiées en 10 familles (dictionnaire de 1 003 mots-clés). Diagramme de Pareto, calcul MTBF/MTTR, analyse AMDEC (G×O×D) et modélisation par la loi de Weibull (β, η par famille)."),
+            ("2","Modélisation Machine Learning","Construction d'un dataset binaire de 19 840 lignes à partir des paramètres Weibull, de l'AMDEC et des 2 825 lignes de données MPS. Entraînement d'un Random Forest à 15 features, optimisation du seuil de décision (0.30), validation par courbe ROC (AUC 0.772)."),
+            ("3","Déploiement du tableau de bord","Système d'aide à la décision Streamlit : 8 modules incluant l'analyse prédictive, les fiches intervention, la fiabilité Weibull, l'historique Pareto et l'administration du modèle. Séparation explicite entre probabilité ML et priorité de maintenance opérationnelle."),
+            ("4","Boucle d'amélioration continue","Saisie terrain (état machine, retour d'intervention) alimentant un cycle de réentraînement périodique du modèle — le système apprend progressivement des observations des techniciens et ingénieurs."),
+        ]
+        for num, titre, desc in etapes_projet:
+            st.markdown(f"""
+            <div class="guide-step">
+              <div class="step-num">{num}</div>
+              <div class="step-content"><h4>{titre}</h4><p>{desc}</p></div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="section-title">Valeur ajoutée pour GMD Métal Tanger</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="model-card">
+          <div class="model-row"><span class="model-label">Composant le plus critique identifié</span><span class="model-value">Lanceur / Bol Vibrant (AMDEC = 500)</span></div>
+          <div class="model-row"><span class="model-label">MTBF du composant critique</span><span class="model-value">54,6 h (2,3 jours)</span></div>
+          <div class="model-row"><span class="model-label">Approche</span><span class="model-value">Maintenance réactive → proactive</span></div>
+          <div class="model-row"><span class="model-label">Bénéfice attendu</span><span class="model-value">Réduction des arrêts non planifiés</span></div>
+          <div class="model-row"><span class="model-label">Clients finaux concernés</span><span class="model-value">Renault, Stellantis</span></div>
+        </div>""", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="section-title">Chiffres clés du diagnostic</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="model-card">
+          <div class="model-row"><span class="model-label">Familles de défaillances</span><span class="model-value">10</span></div>
+          <div class="model-row"><span class="model-label">Familles PRIORITAIRES (AMDEC)</span><span class="model-value">3</span></div>
+          <div class="model-row"><span class="model-label">Familles en SURVEILLANCE</span><span class="model-value">3</span></div>
+          <div class="model-row"><span class="model-label">Lignes MPS exploitées</span><span class="model-value">2 825</span></div>
+          <div class="model-row"><span class="model-label">Features du modèle</span><span class="model-value">15</span></div>
+          <div class="model-row"><span class="model-label">Dataset ML</span><span class="model-value">19 840 lignes</span></div>
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="section-title">Architecture technique</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="explain-box">
+          <div class="factor-row"><div class="factor-num">1</div><div>Python (Pandas, NumPy, Scikit-learn, SciPy) pour le traitement et la modélisation</div></div>
+          <div class="factor-row"><div class="factor-num">2</div><div>Random Forest avec SMOTE pour l'équilibrage des classes</div></div>
+          <div class="factor-row"><div class="factor-num">3</div><div>Loi de Weibull (MLE) pour la modélisation de fiabilité</div></div>
+          <div class="factor-row"><div class="factor-num">4</div><div>Streamlit + Plotly pour le tableau de bord interactif</div></div>
+          <div class="factor-row"><div class="factor-num">5</div><div>Déploiement continu via GitHub + Streamlit Cloud</div></div>
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="section-title">Limites documentées</div>', unsafe_allow_html=True)
+        st.warning("Défaut Soudure/Électrodes et Problème Électrique : moins de 10 pannes/an — données insuffisantes pour un apprentissage fiable (Recall = 0.000 sur ces 2 familles).")
+        st.info("Le système est un outil d'aide à la décision, pas une prédiction certaine — les résultats doivent être confirmés par l'observation terrain via la page « État Actuel Machine ».")
+
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align:center;padding:20px 0">
+      <div style="color:#5EA1F0;font-weight:800;font-size:15px;margin-bottom:8px">Projet de Fin d'Années — ENSAM Meknès — Génie Électromécanique</div>
+      <div style="color:#7C8BA8;font-size:12px">GMD Métal Tanger · ZAP PLT · UAP Assemblage · Année universitaire 2025–2026</div>
+    </div>""", unsafe_allow_html=True)
+    footer()
+
+# ═══════════════════════════════════════════
 # PAGE 1 — DASHBOARD GLOBAL
 # ═══════════════════════════════════════════
-if page == "🏠  Dashboard Global":
+elif page == "🏠  Dashboard Global":
     header("🏭 Dashboard Global — Aide à la Décision Maintenance",
            "ZAP PLT · UAP Assemblage · Synthèse temps réel basée sur historique + Weibull + AMDEC",
            "AIDE À LA DÉCISION","Mode actif")
@@ -542,26 +654,6 @@ if page == "🏠  Dashboard Global":
             stat = "⚠️ En retard" if r['mps_retard'] else "🟡 Proche" if r['jours_depuis_mps']>r['intervalle_mps_ref']*0.8 else "✅ À jour"
             rows.append({'Famille':f[:20],'Dernière MPS':f"{r['jours_depuis_mps']}j",'Statut':stat})
         st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-    st.markdown('<div class="section-title">Synthèse du projet</div>', unsafe_allow_html=True)
-    s1,s2,s3,s4,s5 = st.columns(5)
-    s1.metric("Pannes analysées", "2 943", help="Historique GMAO 2020-2025")
-    s2.metric("MPS exploitées", "2 825")
-    s3.metric("Features modèle", "15")
-    s4.metric("Recall / AUC", f"{st.session_state.recall_actuel:.3f} / {st.session_state.auc_actuel:.3f}")
-    s5.metric("Familles suivies", "10")
-    st.markdown("""
-    <div style="background:#0D1526;border:1px solid #22314D;border-radius:12px;padding:16px 20px;margin:12px 24px 0">
-      <div style="color:#5EA1F0;font-weight:700;font-size:12.5px;margin-bottom:6px">🎯 En résumé</div>
-      <div style="color:#9BAAC7;font-size:12px;line-height:1.6">
-        Ce système transforme l'historique GMAO de la cellule DENGENSHA (9 651 interventions brutes, 2020–2025) en un outil
-        d'aide à la décision : diagnostic de fiabilité (Pareto, AMDEC, Weibull, MTBF/MTTR), modèle Random Forest
-        (Recall {:.3f}, AUC {:.3f}) et tableau de bord opérationnel — dans le but de réduire les arrêts non planifiés
-        et de soutenir la cadence de production destinée à Renault et Stellantis.
-      </div>
-    </div>
-    """.format(st.session_state.recall_actuel, st.session_state.auc_actuel), unsafe_allow_html=True)
-
     footer()
 
 # ═══════════════════════════════════════════════════════
@@ -682,6 +774,241 @@ elif page == "🔧  État Actuel Machine":
               </div>
               <div class="pc-action">📋 {action}{' — Observation : ' + obs['observation'] if obs['observation'] else ''}</div>
             </div>""", unsafe_allow_html=True)
+    footer()
+
+# ═══════════════════════════════════════════════════════
+# PAGE — SAISIE PANNE DÉDIÉE À L'ALIMENTATION DU MODÈLE ML
+# ═══════════════════════════════════════════════════════
+elif page == "📝  Saisie Panne (ML)":
+    header("📝 Saisie Panne — Alimentation du Modèle ML",
+           "Chaque champ ici alimente directement une feature du modèle — la précision de la saisie détermine la fiabilité future des prédictions")
+
+    st.markdown("""
+    <div style="background:#0B1E36;border:1px solid #1E3A5C;border-left:4px solid #3B82F6;
+                border-radius:10px;padding:16px 20px;margin:0 0 20px">
+      <div style="color:#5EA1F0;font-weight:800;font-size:13px;margin-bottom:6px">🎯 Pourquoi cette page est différente</div>
+      <div style="color:#9BAAC7;font-size:12px;line-height:1.7">
+        L'historique 2020–2025 souffre de fautes de frappe, de descriptions vagues et de données manquantes qui limitent le Recall du modèle
+        sur plusieurs familles. Cette page impose une saisie structurée (menus déroulants, champs obligatoires, détection de doublon) pour que chaque
+        nouvelle panne enregistrée soit directement exploitable comme donnée d'entraînement — sans post-traitement ni dictionnaire de correction.
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Calcul de la qualité des données saisies cette session ──
+    def calc_qualite_saisies():
+        if not st.session_state.saisies_pannes_ml:
+            return None
+        total_champs = 0
+        champs_remplis = 0
+        for s in st.session_state.saisies_pannes_ml:
+            champs_critiques = ['famille', 'datetime', 'duree_h', 'symptome', 'cause', 'action']
+            for c in champs_critiques:
+                total_champs += 1
+                val = s.get(c)
+                if val not in (None, '', 'Autre', 0):
+                    champs_remplis += 1
+        return round(champs_remplis / total_champs * 100, 1) if total_champs else None
+
+    qualite = calc_qualite_saisies()
+    nb_saisies_ml = len(st.session_state.saisies_pannes_ml)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"""
+        <div class="kpi-card {'ok' if (qualite or 0)>=85 else 'warn' if (qualite or 0)>=60 else 'crit'}">
+          <div class="kpi-top"><div class="kpi-label">📊 Qualité des données</div></div>
+          <div class="kpi-value">{qualite if qualite is not None else '—'}{'%' if qualite is not None else ''}</div>
+          <div class="kpi-sub">Taux de complétude des champs critiques</div>
+        </div>""", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"""
+        <div class="kpi-card">
+          <div class="kpi-top"><div class="kpi-label">📝 Pannes saisies (session)</div></div>
+          <div class="kpi-value">{nb_saisies_ml}</div>
+          <div class="kpi-sub">Prêtes pour le prochain réentraînement</div>
+        </div>""", unsafe_allow_html=True)
+    with col3:
+        nb_rares = sum(1 for s in st.session_state.saisies_pannes_ml if s.get('famille') in ['Défaut Soudure / Électrodes','Problème Électrique'])
+        st.markdown(f"""
+        <div class="kpi-card {'ok' if nb_rares>0 else ''}">
+          <div class="kpi-top"><div class="kpi-label">🎯 Familles rares capturées</div></div>
+          <div class="kpi-value">{nb_rares}</div>
+          <div class="kpi-sub">Soudure/Électrodes + Problème Électrique</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    tab1, tab2, tab3 = st.tabs(["🔧 Saisir une panne (structurée)", "🛠️ Saisir une MPS (structurée)", "📋 Historique & export"])
+
+    # ══════════════════════════════════════════
+    # TAB 1 — SAISIE PANNE STRICTE
+    # ══════════════════════════════════════════
+    with tab1:
+        col_form, col_help = st.columns([2,1])
+
+        with col_form:
+            fam_choice = st.selectbox("Famille de la panne *", FAMILLES, key="fam_ml_preview")
+
+            est_famille_rare = fam_choice in ['Défaut Soudure / Électrodes', 'Problème Électrique']
+            if est_famille_rare:
+                st.warning(f"⚠️ **{fam_choice}** est une famille peu fréquente dans l'historique — chaque saisie compte particulièrement pour améliorer la détection du modèle sur cette famille. Merci de renseigner le symptôme et la cause avec le plus de précision possible.")
+
+            with st.form("form_panne_ml", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1:
+                    date_p = st.date_input("Date de la panne *", value=datetime.now().date())
+                    heure_p = st.time_input("Heure exacte *", value=datetime.now().time())
+                    duree_p = st.number_input("Durée de l'intervention (minutes) *", min_value=1, max_value=4320, value=30, step=5)
+                    symptome_p = st.selectbox("Symptôme observé *", SYMPTOMES[fam_choice])
+                    symptome_autre = st.text_input("Précision si 'Autre' (symptôme)") if symptome_p == "Autre" else ""
+                with c2:
+                    cause_p = st.selectbox("Cause identifiée *", [c for c,_ in CAUSES[fam_choice]] + ["Autre / cause non identifiée"])
+                    cause_autre = st.text_input("Précision si cause non identifiée") if cause_p == "Autre / cause non identifiée" else ""
+                    action_p = st.selectbox("Action réalisée *", ACTIONS[fam_choice] + ["Autre"])
+                    action_autre = st.text_input("Précision si 'Autre' (action)") if action_p == "Autre" else ""
+                    gravite_p = st.select_slider("Gravité perçue *", options=NIVEAUX_GRAVITE, value=NIVEAUX_GRAVITE[2])
+
+                c3, c4 = st.columns(2)
+                with c3:
+                    piece_p = st.text_input("Pièce remplacée (si applicable)", placeholder="Ex: gaine de transfert, capteur présence...")
+                with c4:
+                    tech_p = st.text_input("Technicien *", placeholder="Nom et prénom")
+
+                commentaire_p = st.text_area("Commentaire libre (optionnel — ne remplace pas les champs ci-dessus)", height=60)
+
+                submitted = st.form_submit_button("✅ Enregistrer la panne pour le modèle", use_container_width=True)
+
+                if submitted:
+                    dt_p = datetime.combine(date_p, heure_p)
+                    erreurs = []
+                    if not tech_p.strip(): erreurs.append("Le nom du technicien est obligatoire.")
+                    if symptome_p == "Autre" and not symptome_autre.strip(): erreurs.append("Précisez le symptôme observé.")
+                    if cause_p == "Autre / cause non identifiée" and not cause_autre.strip(): erreurs.append("Précisez la cause si possible.")
+
+                    # Détection de doublon : même famille, moins d'1h d'écart
+                    doublon = False
+                    for s in st.session_state.saisies_pannes_ml:
+                        if s['famille'] == fam_choice and abs((s['datetime'] - dt_p).total_seconds()) < 3600:
+                            doublon = True
+                            break
+
+                    if doublon:
+                        st.error("🚫 Une panne similaire sur cette famille a déjà été saisie à moins d'1h d'écart. Vérifiez qu'il ne s'agit pas d'un doublon avant de continuer.")
+                    elif erreurs:
+                        for e in erreurs: st.error(f"⚠️ {e}")
+                    else:
+                        row = {
+                            'famille': fam_choice, 'datetime': dt_p, 'duree_h': round(duree_p/60, 2),
+                            'symptome': symptome_autre if symptome_p == "Autre" else symptome_p,
+                            'cause': cause_autre if cause_p == "Autre / cause non identifiée" else cause_p,
+                            'action': action_autre if action_p == "Autre" else action_p,
+                            'piece': piece_p, 'gravite': gravite_p, 'technicien': tech_p,
+                            'commentaire': commentaire_p, 'famille_rare': est_famille_rare,
+                        }
+                        st.session_state.saisies_pannes_ml.append(row)
+                        sauver_csv(CSV_PANNES_ML, {**row, 'datetime': dt_p.strftime('%Y-%m-%d %H:%M')})
+                        st.session_state.nb_saisies += 1
+
+                        # Aperçu des features recalculées — pédagogique
+                        st.success(f"✅ Panne enregistrée sur **{fam_choice}** — donnée structurée prête pour le modèle")
+                        st.markdown("**Features recalculées automatiquement à partir de cette saisie :**")
+                        cf1, cf2, cf3, cf4 = st.columns(4)
+                        cf1.metric("TBF_h", "0.0h", help="Remis à zéro à l'instant de la panne")
+                        cf2.metric("Jour_semaine", dt_p.strftime('%A')[:3])
+                        cf3.metric("Nb_pannes_7j", "+1", help="Incrémenté pour cette famille")
+                        cf4.metric("Criticite", str(AMDEC[fam_choice]))
+                        st.balloons()
+
+        with col_help:
+            st.markdown('<div class="explain-box"><div class="explain-title">📐 Règles de saisie stricte</div>', unsafe_allow_html=True)
+            regles = [
+                "La famille est choisie dans une liste fermée — jamais de saisie libre, pour éliminer les fautes de frappe qui empêchaient la classification automatique dans l'historique.",
+                "La date et l'heure doivent être exactes : elles recalculent directement le TBF, la feature la plus importante après Jour_semaine.",
+                "Symptôme, cause et action utilisent des menus déroulants pré-remplis pour garantir une donnée exploitable sans dictionnaire de correction.",
+                "Le système détecte les doublons (même famille, moins d'1h d'écart) pour éviter de fausser Nb_pannes_7j et Nb_pannes_30j.",
+                "Photo et commentaire libre restent optionnels : ils n'alimentent aucune feature du modèle actuel.",
+            ]
+            for i, r in enumerate(regles, 1):
+                st.markdown(f'<div class="factor-row"><div class="factor-num">{i}</div><div>{r}</div></div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════
+    # TAB 2 — SAISIE MPS STRICTE
+    # ══════════════════════════════════════════
+    with tab2:
+        st.info("💡 3 des 4 features liées à la maintenance préventive (MPS_en_retard, Ratio_MPS_respecte, Jours_depuis_MPS) figurent parmi les variables les plus importantes du modèle — une saisie MPS rigoureuse est aussi critique qu'une saisie panne.")
+
+        with st.form("form_mps_ml", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                fam_m = st.selectbox("Famille concernée *", FAMILLES, key="fam_mps_ml")
+                date_m = st.date_input("Date de la MPS *", value=datetime.now().date())
+                heure_m = st.time_input("Heure *", value=datetime.now().time())
+                gamme_m = st.selectbox("Gamme réalisée *", ["G1 — Journalière","G2 — Hebdomadaire","G3 — Mensuelle","G4 — Trimestrielle","G5 — Annuelle"])
+            with c2:
+                duree_m = st.number_input("Durée de la MPS (minutes) *", min_value=1, max_value=480, value=30, step=5)
+                anomalie_m = st.selectbox("Anomalie détectée durant la MPS *", ["Aucune","Usure légère","Usure importante — à surveiller","Défaut détecté et corrigé sur place"])
+                tech_m = st.text_input("Technicien *")
+            observations_m = st.text_area("Observations techniques (optionnel)", height=60)
+
+            sub_m = st.form_submit_button("✅ Enregistrer la MPS pour le modèle", use_container_width=True)
+            if sub_m:
+                if not tech_m.strip():
+                    st.error("⚠️ Le nom du technicien est obligatoire.")
+                else:
+                    dt_m = datetime.combine(date_m, heure_m)
+                    row_m = {'famille': fam_m, 'datetime': dt_m, 'gamme': gamme_m,
+                             'duree_h': round(duree_m/60,2), 'anomalie': anomalie_m,
+                             'technicien': tech_m, 'observations': observations_m}
+                    st.session_state.saisies_mps_ml.append(row_m)
+                    sauver_csv(CSV_MPS_ML, {**row_m, 'datetime': dt_m.strftime('%Y-%m-%d %H:%M')})
+                    st.session_state.nb_saisies += 1
+                    st.success(f"✅ MPS enregistrée sur **{fam_m}** — Jours_depuis_MPS et MPS_en_retard recalculés")
+
+    # ══════════════════════════════════════════
+    # TAB 3 — HISTORIQUE & EXPORT
+    # ══════════════════════════════════════════
+    with tab3:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"**🔧 Pannes structurées saisies : {len(st.session_state.saisies_pannes_ml)}**")
+            if st.session_state.saisies_pannes_ml:
+                df_p = pd.DataFrame(st.session_state.saisies_pannes_ml)
+                df_show = df_p.copy()
+                df_show['datetime'] = pd.to_datetime(df_show['datetime']).dt.strftime('%d/%m/%Y %H:%M')
+                st.dataframe(df_show[['datetime','famille','symptome','cause','gravite','technicien']].tail(10),
+                             hide_index=True, use_container_width=True)
+                st.download_button("📥 Exporter CSV (dataset ML)", df_p.to_csv(index=False).encode(),
+                                   "pannes_saisies_ml.csv", "text/csv")
+            else:
+                st.info("Aucune panne saisie dans cette session")
+        with c2:
+            st.markdown(f"**🛠️ MPS structurées saisies : {len(st.session_state.saisies_mps_ml)}**")
+            if st.session_state.saisies_mps_ml:
+                df_m = pd.DataFrame(st.session_state.saisies_mps_ml)
+                df_show_m = df_m.copy()
+                df_show_m['datetime'] = pd.to_datetime(df_show_m['datetime']).dt.strftime('%d/%m/%Y %H:%M')
+                st.dataframe(df_show_m[['datetime','famille','gamme','anomalie','technicien']].tail(10),
+                             hide_index=True, use_container_width=True)
+                st.download_button("📥 Exporter CSV MPS (dataset ML)", df_m.to_csv(index=False).encode(),
+                                   "mps_saisies_ml.csv", "text/csv")
+            else:
+                st.info("Aucune MPS saisie dans cette session")
+
+        if qualite is not None:
+            st.markdown("---")
+            st.markdown('<div class="section-title">Jauge de qualité des données — session en cours</div>', unsafe_allow_html=True)
+            fig_q = go.Figure(go.Indicator(
+                mode="gauge+number", value=qualite,
+                number={'suffix':'%','font':{'color':'#F5F7FA','size':26,'family':'JetBrains Mono'}},
+                title={'text':"Taux de complétude des champs critiques",'font':{'color':'#7C8BA8','size':12}},
+                gauge={'axis':{'range':[0,100],'tickcolor':'#7C8BA8'},
+                       'bar':{'color':'#22C55E' if qualite>=85 else '#F59E0B' if qualite>=60 else '#EF4444'},
+                       'bgcolor':'#101B30','bordercolor':'#1E2C47',
+                       'steps':[{'range':[0,60],'color':'#170C0C'},{'range':[60,85],'color':'#15130A'},{'range':[85,100],'color':'#0B1810'}]}))
+            fig_q.update_layout(height=260, margin=dict(l=20,r=20,t=50,b=10), paper_bgcolor='#101B30', font=dict(color='#DDE4F0'))
+            st.plotly_chart(fig_q, use_container_width=True)
+            st.caption("Cette jauge mesure le pourcentage de champs critiques (famille, date, durée, symptôme, cause, action) correctement renseignés — et non laissés sur 'Autre' sans précision — parmi toutes les saisies de la session.")
     footer()
 
 # ═══════════════════════════════════════════════════════
