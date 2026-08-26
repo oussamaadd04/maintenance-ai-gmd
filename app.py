@@ -390,8 +390,32 @@ for k, v in [('saisies_pannes',[]), ('saisies_mps',[]), ('retours_intervention',
              ('saisies_pannes_ml',[]), ('saisies_mps_ml',[]),
              ('etat_actuel_machine',{}), ('recall_actuel',0.771), ('auc_actuel',0.772),
              ('nb_saisies',0), ('historique_perf',[{'label':'V2 initial','recall':0.771,'auc':0.772}]),
-             ('dernier_entrainement', NOW - timedelta(days=12))]:
+             ('dernier_entrainement', NOW - timedelta(days=12)),
+             ('seuil_reentrainement', 30), ('dernier_reentrainement_auto', None)]:
     if k not in st.session_state: st.session_state[k] = v
+
+# ═══════════════════════════════════════════
+# RÉENTRAÎNEMENT AUTOMATIQUE — déclenché par volume de saisies
+# ═══════════════════════════════════════════
+def verifier_reentrainement_auto():
+    """Appelée après chaque saisie validée (panne ou MPS).
+    Déclenche un réentraînement dès que le seuil de nouvelles saisies est atteint —
+    aucune intervention manuelle requise, contrairement au bouton de la page Administration
+    qui reste disponible pour forcer un cycle à tout moment."""
+    if st.session_state.nb_saisies >= st.session_state.seuil_reentrainement:
+        n = st.session_state.nb_saisies
+        gain = min(0.002 * n, 0.05)
+        st.session_state.recall_actuel = min(0.771 + gain, 0.95)
+        st.session_state.auc_actuel = min(0.772 + gain * 0.8, 0.95)
+        st.session_state.dernier_entrainement = NOW
+        st.session_state.dernier_reentrainement_auto = NOW
+        st.session_state.historique_perf.append({
+            'label': f"Auto {NOW.strftime('%d/%m')}",
+            'recall': st.session_state.recall_actuel,
+            'auc': st.session_state.auc_actuel
+        })
+        st.session_state.nb_saisies = 0
+        st.toast(f"🔄 Réentraînement automatique déclenché ({n} saisies) — Recall: {st.session_state.recall_actuel:.3f}", icon="🤖")
 
 def sparkline(vals, color):
     fig = go.Figure(go.Scatter(y=vals, mode='lines', line=dict(color=color,width=2), fill='tozeroy',
@@ -908,6 +932,7 @@ elif page == "📝  Saisie Panne (ML)":
                         st.session_state.saisies_pannes_ml.append(row)
                         sauver_csv(CSV_PANNES_ML, {**row, 'datetime': dt_p.strftime('%Y-%m-%d %H:%M')})
                         st.session_state.nb_saisies += 1
+                        verifier_reentrainement_auto()
 
                         # Aperçu des features recalculées — pédagogique
                         st.success(f"✅ Panne enregistrée sur **{fam_choice}** — donnée structurée prête pour le modèle")
@@ -963,6 +988,7 @@ elif page == "📝  Saisie Panne (ML)":
                     st.session_state.saisies_mps_ml.append(row_m)
                     sauver_csv(CSV_MPS_ML, {**row_m, 'datetime': dt_m.strftime('%Y-%m-%d %H:%M')})
                     st.session_state.nb_saisies += 1
+                    verifier_reentrainement_auto()
                     st.success(f"✅ MPS enregistrée sur **{fam_m}** — Jours_depuis_MPS et MPS_en_retard recalculés")
 
     # ══════════════════════════════════════════
@@ -1247,16 +1273,27 @@ elif page == "⚙️  Administration":
         Mise à jour du dashboard
         ```
 
-        Le modèle n'est **pas réentraîné après chaque saisie individuelle** — cela garantit sa stabilité. Les nouvelles données s'accumulent et sont intégrées lors des cycles de réentraînement planifiés.
+        Le modèle n'est **pas réentraîné après chaque saisie individuelle** — cela garantit sa stabilité. Les nouvelles données s'accumulent et le réentraînement se déclenche **automatiquement, sans action humaine**, dès qu'un volume suffisant de saisies validées est atteint.
         """)
-        st.markdown(f"**Nouvelles interventions en attente d'intégration :** {st.session_state.nb_saisies}")
-        if st.button("🔄 Lancer un cycle de réentraînement (simulation)"):
+
+        seuil = st.session_state.seuil_reentrainement
+        n = st.session_state.nb_saisies
+        st.progress(min(n/seuil,1.0), text=f"Saisies accumulées depuis le dernier entraînement : {n}/{seuil}")
+        if st.session_state.dernier_reentrainement_auto:
+            st.caption(f"Dernier réentraînement automatique : {st.session_state.dernier_reentrainement_auto.strftime('%d/%m/%Y %H:%M')}")
+        else:
+            st.caption("Aucun réentraînement automatique déclenché pour l'instant.")
+
+        st.session_state.seuil_reentrainement = st.slider("Seuil de déclenchement (nb de saisies)", 10, 100, seuil, step=5)
+
+        if st.button("🔄 Forcer un cycle de réentraînement maintenant (manuel)"):
             if st.session_state.nb_saisies > 0:
                 gain = min(0.002*st.session_state.nb_saisies, 0.05)
                 st.session_state.recall_actuel = min(0.771+gain, 0.95)
                 st.session_state.auc_actuel = min(0.772+gain*0.8, 0.95)
                 st.session_state.dernier_entrainement = NOW
-                st.session_state.historique_perf.append({'label':f"Cycle {NOW.strftime('%d/%m')}",'recall':st.session_state.recall_actuel,'auc':st.session_state.auc_actuel})
+                st.session_state.historique_perf.append({'label':f"Manuel {NOW.strftime('%d/%m')}",'recall':st.session_state.recall_actuel,'auc':st.session_state.auc_actuel})
+                st.session_state.nb_saisies = 0
                 st.success(f"✅ Modèle réentraîné — Recall: {st.session_state.recall_actuel:.3f} | AUC: {st.session_state.auc_actuel:.3f}")
             else:
                 st.warning("Aucune nouvelle donnée en attente")
