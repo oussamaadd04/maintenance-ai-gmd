@@ -1171,18 +1171,38 @@ elif page == "📊  Historique & Pareto":
         np.random.seed(42); bases={'Lanceur / Bol Vibrant':14,'Panne Machine Générale':10,'Capteurs / Cellules':8,'Blocage Écrou':6,'Volet / Trappe':6}
         colors=['#EF4444','#F59E0B','#3B82F6','#22C55E','#A78BFA']
         fams_sel = st.multiselect("Familles à afficher", list(bases.keys()), default=list(bases.keys())[:3])
+
+        # Intégration des nouvelles saisies (page Saisie Panne ML) dans le mois correspondant
+        saisies_par_mois_fam = {}
+        for s in st.session_state.saisies_pannes_ml:
+            idx_mois = s['datetime'].month - 1
+            saisies_par_mois_fam.setdefault(s['famille'], [0]*12)
+            saisies_par_mois_fam[s['famille']][idx_mois] += 1
+
         fig_ev = go.Figure()
         for i,f in enumerate(fams_sel):
             base=bases.get(f,4); vals=[max(0,int(base+np.random.randint(-3,5))) for _ in range(12)]
+            if f in saisies_par_mois_fam:
+                vals = [v + saisies_par_mois_fam[f][idx] for idx,v in enumerate(vals)]
             fig_ev.add_trace(go.Scatter(x=mois,y=vals,name=f[:22],line=dict(color=colors[i%5],width=2.5),mode='lines+markers'))
         fig_ev.update_layout(height=400,paper_bgcolor='#101B30',plot_bgcolor='#101B30',font=dict(color='#DDE4F0'),
                              xaxis=dict(color='#7C8BA8',gridcolor='#1E2C47'),yaxis=dict(title="Nb pannes",color='#7C8BA8',gridcolor='#1E2C47'))
         st.plotly_chart(fig_ev, use_container_width=True)
+        if any(f in saisies_par_mois_fam for f in fams_sel):
+            st.caption("📝 Les pannes saisies via « Saisie Panne (ML) » durant cette session sont intégrées au mois correspondant.")
 
     with tab2:
         pannes_tot={'Lanceur / Bol Vibrant':837,'Panne Machine Générale':567,'Volet / Trappe':305,'Capteurs / Cellules':285,
                     'Blocage Écrou':265,'Circuit Refroidissement':263,'Circuit Pneumatique':215,'Plateau Indexage':156,
                     'Défaut Soudure / Électrodes':39,'Problème Électrique':20}
+
+        # Intégration des nouvelles saisies (page Saisie Panne ML) dans le Pareto
+        nb_nouvelles_par_famille = {}
+        for s in st.session_state.saisies_pannes_ml:
+            nb_nouvelles_par_famille[s['famille']] = nb_nouvelles_par_famille.get(s['famille'], 0) + 1
+        for f, n in nb_nouvelles_par_famille.items():
+            pannes_tot[f] = pannes_tot.get(f, 0) + n
+
         total=sum(pannes_tot.values()); fams_sort=sorted(pannes_tot,key=lambda x:-pannes_tot[x])
         counts=[pannes_tot[f] for f in fams_sort]; pcts=[c/total*100 for c in counts]; cumul=list(np.cumsum(pcts))
         fig_p = go.Figure()
@@ -1195,6 +1215,8 @@ elif page == "📊  Historique & Pareto":
                             height=440, paper_bgcolor='#101B30', plot_bgcolor='#101B30', font=dict(color='#DDE4F0'),
                             xaxis=dict(color='#7C8BA8',tickangle=25))
         st.plotly_chart(fig_p, use_container_width=True)
+        if nb_nouvelles_par_famille:
+            st.caption(f"📝 {sum(nb_nouvelles_par_famille.values())} nouvelle(s) panne(s) saisie(s) cette session déjà intégrée(s) au calcul du Pareto.")
 
     with tab3:
         rows=[]
