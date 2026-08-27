@@ -386,12 +386,94 @@ def get_analyse_complete():
 # ═══════════════════════════════════════════
 # SESSION STATE
 # ═══════════════════════════════════════════
-for k, v in [('saisies_pannes',[]), ('saisies_mps',[]), ('retours_intervention',[]),
-             ('saisies_pannes_ml',[]), ('saisies_mps_ml',[]),
-             ('etat_actuel_machine',{}), ('recall_actuel',0.771), ('auc_actuel',0.772),
-             ('nb_saisies',0), ('historique_perf',[{'label':'V2 initial','recall':0.771,'auc':0.772}]),
-             ('dernier_entrainement', NOW - timedelta(days=12)),
-             ('seuil_reentrainement', 30), ('dernier_reentrainement_auto', None)]:
+# ═══════════════════════════════════════════
+# PERSISTANCE — rechargement des saisies et de l'état du modèle au démarrage
+# ═══════════════════════════════════════════
+ETAT_MODELE_PATH = "etat_modele.json"
+
+def charger_pannes_ml():
+    if os.path.exists(CSV_PANNES_ML):
+        try:
+            df = pd.read_csv(CSV_PANNES_ML)
+            df['datetime'] = pd.to_datetime(df['datetime'])
+            if 'famille_rare' in df.columns:
+                df['famille_rare'] = df['famille_rare'].astype(str).str.strip().str.lower().isin(['true','1'])
+            return df.to_dict('records')
+        except Exception:
+            pass
+    return []
+
+def charger_mps_ml():
+    if os.path.exists(CSV_MPS_ML):
+        try:
+            df = pd.read_csv(CSV_MPS_ML)
+            df['datetime'] = pd.to_datetime(df['datetime'])
+            return df.to_dict('records')
+        except Exception:
+            pass
+    return []
+
+def charger_retours():
+    if os.path.exists(CSV_RETOUR):
+        try:
+            return pd.read_csv(CSV_RETOUR).to_dict('records')
+        except Exception:
+            pass
+    return []
+
+def charger_etat_modele():
+    if os.path.exists(ETAT_MODELE_PATH):
+        try:
+            with open(ETAT_MODELE_PATH, 'r', encoding='utf-8') as f:
+                d = json.load(f)
+            d['dernier_entrainement'] = datetime.fromisoformat(d['dernier_entrainement'])
+            d['dernier_reentrainement_auto'] = (datetime.fromisoformat(d['dernier_reentrainement_auto'])
+                                                 if d.get('dernier_reentrainement_auto') else None)
+            return d
+        except Exception:
+            pass
+    return {}
+
+def sauver_etat_modele():
+    """Persiste sur disque l'état du modèle (compteur, métriques, historique) pour que
+    les rechargements de page ou les nouvelles sessions ne perdent pas la progression
+    vers le prochain réentraînement automatique."""
+    d = {
+        'nb_saisies': st.session_state.nb_saisies,
+        'recall_actuel': st.session_state.recall_actuel,
+        'auc_actuel': st.session_state.auc_actuel,
+        'dernier_entrainement': st.session_state.dernier_entrainement.isoformat(),
+        'dernier_reentrainement_auto': (st.session_state.dernier_reentrainement_auto.isoformat()
+                                         if st.session_state.dernier_reentrainement_auto else None),
+        'seuil_reentrainement': st.session_state.seuil_reentrainement,
+        'historique_perf': st.session_state.historique_perf,
+    }
+    try:
+        with open(ETAT_MODELE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(d, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+# ═══════════════════════════════════════════
+# SESSION STATE — initialisé une seule fois par session, rechargé depuis le
+# disque (CSV + etat_modele.json) plutôt que de repartir à vide à chaque
+# rafraîchissement de page ou nouvelle session de navigateur.
+# ═══════════════════════════════════════════
+if 'saisies_pannes' not in st.session_state: st.session_state.saisies_pannes = []
+if 'saisies_mps' not in st.session_state: st.session_state.saisies_mps = []
+if 'etat_actuel_machine' not in st.session_state: st.session_state.etat_actuel_machine = {}
+if 'saisies_pannes_ml' not in st.session_state: st.session_state.saisies_pannes_ml = charger_pannes_ml()
+if 'saisies_mps_ml' not in st.session_state: st.session_state.saisies_mps_ml = charger_mps_ml()
+if 'retours_intervention' not in st.session_state: st.session_state.retours_intervention = charger_retours()
+
+_etat_persiste = charger_etat_modele()
+for k, v in [('recall_actuel', _etat_persiste.get('recall_actuel', 0.771)),
+             ('auc_actuel', _etat_persiste.get('auc_actuel', 0.772)),
+             ('nb_saisies', _etat_persiste.get('nb_saisies', 0)),
+             ('historique_perf', _etat_persiste.get('historique_perf', [{'label':'V2 initial','recall':0.771,'auc':0.772}])),
+             ('dernier_entrainement', _etat_persiste.get('dernier_entrainement', NOW - timedelta(days=12))),
+             ('seuil_reentrainement', _etat_persiste.get('seuil_reentrainement', 30)),
+             ('dernier_reentrainement_auto', _etat_persiste.get('dernier_reentrainement_auto', None))]:
     if k not in st.session_state: st.session_state[k] = v
 
 # ═══════════════════════════════════════════
@@ -415,6 +497,7 @@ def verifier_reentrainement_auto():
             'auc': st.session_state.auc_actuel
         })
         st.session_state.nb_saisies = 0
+        sauver_etat_modele()
         st.toast(f"🔄 Réentraînement automatique déclenché ({n} saisies) — Recall: {st.session_state.recall_actuel:.3f}", icon="🤖")
 
 def sparkline(vals, color):
@@ -932,6 +1015,7 @@ elif page == "📝  Saisie Panne (ML)":
                         st.session_state.saisies_pannes_ml.append(row)
                         sauver_csv(CSV_PANNES_ML, {**row, 'datetime': dt_p.strftime('%Y-%m-%d %H:%M')})
                         st.session_state.nb_saisies += 1
+                        sauver_etat_modele()
                         verifier_reentrainement_auto()
 
                         # Aperçu des features recalculées — pédagogique
@@ -988,6 +1072,7 @@ elif page == "📝  Saisie Panne (ML)":
                     st.session_state.saisies_mps_ml.append(row_m)
                     sauver_csv(CSV_MPS_ML, {**row_m, 'datetime': dt_m.strftime('%Y-%m-%d %H:%M')})
                     st.session_state.nb_saisies += 1
+                    sauver_etat_modele()
                     verifier_reentrainement_auto()
                     st.success(f"✅ MPS enregistrée sur **{fam_m}** — Jours_depuis_MPS et MPS_en_retard recalculés")
 
@@ -1098,6 +1183,8 @@ elif page == "🚨  Fiches Intervention":
                 sauver_csv(CSV_RETOUR, row)
                 st.session_state.retours_intervention.append(row)
                 st.session_state.nb_saisies += 1
+                sauver_etat_modele()
+                verifier_reentrainement_auto()
                 st.success("✅ Retour enregistré — ces données seront intégrées au prochain réentraînement du modèle")
 
         if st.session_state.retours_intervention:
@@ -1306,7 +1393,10 @@ elif page == "⚙️  Administration":
         else:
             st.caption("Aucun réentraînement automatique déclenché pour l'instant.")
 
-        st.session_state.seuil_reentrainement = st.slider("Seuil de déclenchement (nb de saisies)", 10, 100, seuil, step=5)
+        seuil_new = st.slider("Seuil de déclenchement (nb de saisies)", 10, 100, seuil, step=5)
+        if seuil_new != st.session_state.seuil_reentrainement:
+            st.session_state.seuil_reentrainement = seuil_new
+            sauver_etat_modele()
 
         if st.button("🔄 Forcer un cycle de réentraînement maintenant (manuel)"):
             if st.session_state.nb_saisies > 0:
@@ -1316,6 +1406,7 @@ elif page == "⚙️  Administration":
                 st.session_state.dernier_entrainement = NOW
                 st.session_state.historique_perf.append({'label':f"Manuel {NOW.strftime('%d/%m')}",'recall':st.session_state.recall_actuel,'auc':st.session_state.auc_actuel})
                 st.session_state.nb_saisies = 0
+                sauver_etat_modele()
                 st.success(f"✅ Modèle réentraîné — Recall: {st.session_state.recall_actuel:.3f} | AUC: {st.session_state.auc_actuel:.3f}")
             else:
                 st.warning("Aucune nouvelle donnée en attente")
