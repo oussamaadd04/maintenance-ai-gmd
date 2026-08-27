@@ -600,8 +600,8 @@ if page == "🎓  Synthèse du Projet":
         etapes_projet = [
             ("1","Diagnostic de fiabilité","Traitement de 9 651 interventions GMAO → 2 943 pannes exploitables classifiées en 10 familles (dictionnaire de 1 003 mots-clés). Diagramme de Pareto, calcul MTBF/MTTR, analyse AMDEC (G×O×D) et modélisation par la loi de Weibull (β, η par famille)."),
             ("2","Modélisation Machine Learning","Construction d'un dataset binaire de 19 840 lignes à partir des paramètres Weibull, de l'AMDEC et des 2 825 lignes de données MPS. Entraînement d'un Random Forest à 15 features, optimisation du seuil de décision (0.30), validation par courbe ROC (AUC 0.772)."),
-            ("3","Déploiement du tableau de bord","Système d'aide à la décision Streamlit : 8 modules incluant l'analyse prédictive, les fiches intervention, la fiabilité Weibull, l'historique Pareto et l'administration du modèle. Séparation explicite entre probabilité ML et priorité de maintenance opérationnelle."),
-            ("4","Boucle d'amélioration continue","Saisie terrain (état machine, retour d'intervention) alimentant un cycle de réentraînement périodique du modèle — le système apprend progressivement des observations des techniciens et ingénieurs."),
+            ("3","Déploiement du tableau de bord","Système d'aide à la décision Streamlit : 10 modules incluant l'analyse prédictive, la saisie terrain structurée, les fiches intervention, la fiabilité Weibull, l'historique Pareto et l'administration du modèle. Séparation explicite entre probabilité ML et priorité de maintenance opérationnelle."),
+            ("4","Boucle d'amélioration continue","Saisie terrain (état machine, panne structurée, retour d'intervention) alimentant un réentraînement automatique du modèle dès qu'un seuil de nouvelles saisies est atteint — le système apprend progressivement des observations des techniciens et ingénieurs, sans intervention manuelle."),
         ]
         for num, titre, desc in etapes_projet:
             st.markdown(f"""
@@ -1293,7 +1293,7 @@ elif page == "📊  Historique & Pareto":
         total=sum(pannes_tot.values()); fams_sort=sorted(pannes_tot,key=lambda x:-pannes_tot[x])
         counts=[pannes_tot[f] for f in fams_sort]; pcts=[c/total*100 for c in counts]; cumul=list(np.cumsum(pcts))
         fig_p = go.Figure()
-        fig_p.add_trace(go.Bar(x=[f[:18] for f in fams_sort],y=counts,marker_color=['#EF4444' if p>=15 else '#F59E0B' if p>=8 else '#3B82F6' for p in pcts],
+        fig_p.add_trace(go.Bar(x=[f[:18] for f in fams_sort],y=counts,name='Nb pannes',marker_color=['#EF4444' if p>=15 else '#F59E0B' if p>=8 else '#3B82F6' for p in pcts],
                                 text=counts,textposition='outside',textfont=dict(color='#DDE4F0',size=10)))
         fig_p.add_trace(go.Scatter(x=[f[:18] for f in fams_sort],y=cumul,name='Cumul %',yaxis='y2',line=dict(color='#FBBF24',width=2.5),mode='lines+markers'))
         fig_p.add_hline(y=80,line_dash="dash",line_color="#EF4444",yref='y2')
@@ -1327,12 +1327,12 @@ elif page == "⚙️  Administration":
     with tab1:
         jours_depuis_entrainement = (NOW - st.session_state.dernier_entrainement).days
         c1,c2,c3,c4 = st.columns(4)
-        c1.metric("Version modèle","Random Forest V2")
+        c1.metric("Version modèle","RF V2")
         c2.metric("Dernier entraînement", f"il y a {jours_depuis_entrainement}j")
         c3.metric("Recall", f"{st.session_state.recall_actuel:.3f}")
         c4.metric("AUC", f"{st.session_state.auc_actuel:.3f}")
         c5,c6,c7,c8 = st.columns(4)
-        c5.metric("Features","15"); c6.metric("Dataset","19 840 lignes")
+        c5.metric("Features","15"); c6.metric("Dataset","19 840")
         c7.metric("Pannes analysées","2 943"); c8.metric("Nouvelles saisies", st.session_state.nb_saisies)
 
         cm=[[2079,780],[109,362]]
@@ -1442,7 +1442,7 @@ elif page == "📖  Guide & Glossaire":
             ("Différence entre Probabilité ML et Priorité maintenance","La Probabilité ML est la sortie brute du modèle statistique (calibré sur l'historique via Weibull). La Priorité maintenance combine cette probabilité avec la criticité AMDEC, le retard MPS et la fréquence récente — c'est elle qui doit guider la décision opérationnelle."),
             ("Le Health Score","Indicateur global sur 100 qui synthétise l'état de dégradation estimé d'une famille en combinant probabilité ML, priorité, ratio TBF/MTBF et retard MPS. Plus il est proche de 100, plus la situation est favorable."),
             ("Pourquoi le wording a changé ?","Les termes « panne imminente » ou « intervention immédiate obligatoire » suggèrent une certitude que le modèle ne peut pas garantir avec des données historiques seules. Le système utilise désormais des formulations d'aide à la décision : « dégradation élevée », « contrôle préventif recommandé »."),
-            ("Cycle de réentraînement","Le modèle n'apprend pas en continu à chaque saisie — il est réentraîné par cycles périodiques (mensuel/trimestriel) après validation des nouvelles données. Cela évite l'instabilité et garantit la robustesse du modèle en production."),
+            ("Cycle de réentraînement","Le modèle n'apprend pas en continu à chaque saisie — un compteur de nouvelles saisies validées (pannes + MPS + retours) est incrémenté à chaque enregistrement. Dès qu'un seuil paramétrable (30 par défaut) est atteint, le réentraînement se déclenche automatiquement, sans action humaine. Ce pilotage par volume plutôt que par calendrier évite le sur-apprentissage sur un nombre insuffisant de nouvelles données et garantit la robustesse du modèle en production."),
         ]
         for t,d in sections:
             st.markdown(f'<div class="explain-box"><div class="explain-title">❓ {t}</div><div style="color:#9BAAC7;font-size:12.5px;line-height:1.7">{d}</div></div>', unsafe_allow_html=True)
